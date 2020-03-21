@@ -1,9 +1,7 @@
 //
 // Created by edem on 07.03.20.
 //
-
-#ifndef DISTRIBUTEDOMPUTING_PA1_TEMP_H
-#define DISTRIBUTEDOMPUTING_PA1_TEMP_H
+#pragma once
 
 #include <sys/types.h>
 #include "ipc.h"
@@ -15,6 +13,4 @@ typedef struct {
     int *pipe_wr;
 } dist_process;
 
-int processes_total;
-
-#endif //DISTRIBUTEDOMPUTING_PA1_TEMP_H
+extern int processes_total;

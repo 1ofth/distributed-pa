@@ -12,7 +12,10 @@
 #include "distributed.h"
 #include "logger.h"
 
-void close_pipes(dist_process dp[], local_id current) {
+int processes_total;
+FILE *event_log;
+
+static void close_pipes(dist_process dp[], local_id current) {
     for (int i = 0; i < processes_total; ++i) {
         for (int j = 0; j < processes_total; ++j) {
             if (i != j && i != current) {
@@ -23,7 +26,7 @@ void close_pipes(dist_process dp[], local_id current) {
     }
 }
 
-void receive_all(dist_process *dp, local_id curr, Message *msg) {
+static void receive_all(dist_process *dp, local_id curr, Message *msg) {
     memset(msg->s_payload, 0, msg->s_header.s_payload_len);
     for (local_id j = 1; j < processes_total; ++j) {
         if (j != curr) {
@@ -57,8 +60,8 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < processes_total; i++) {
         dist_process process = {
-                .pipe_rd = malloc(processes_total * sizeof(int)),
-                .pipe_wr = malloc(processes_total * sizeof(int)),
+                .pipe_rd = malloc(processes_total * sizeof(process.pipe_rd)),
+                .pipe_wr = malloc(processes_total * sizeof(process.pipe_wr)),
         };
         dp[i] = process;
     }

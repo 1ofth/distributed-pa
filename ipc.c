@@ -8,9 +8,9 @@
 #include "distributed.h"
 
 int send(void *self, local_id dst, const Message *msg) {
-    dist_process s = *(dist_process *) self;
+    dist_process *s = self;
 
-    if ((write(s.pipe_wr[dst], msg, sizeof(MessageHeader) + msg->s_header.s_payload_len)) < 0) {
+    if ((write(s->pipe_wr[dst], msg, sizeof(MessageHeader) + msg->s_header.s_payload_len)) < 0) {
         perror("write");
         return errno;
     }
@@ -18,9 +18,9 @@ int send(void *self, local_id dst, const Message *msg) {
 }
 
 int send_multicast(void *self, const Message *msg) {
-    dist_process p = *(dist_process *) self;
+    dist_process *p = self;
     for (local_id i = 0; i < processes_total; ++i) {
-        if (i != p.local_pid) {
+        if (i != p->local_pid) {
             int res = send(self, i, msg);
             if (res != 0) {
                 return res;
@@ -31,14 +31,14 @@ int send_multicast(void *self, const Message *msg) {
 }
 
 int receive(void *self, local_id from, Message *msg) {
-    dist_process s = *(dist_process *) self;
+    dist_process *s = self;
 
-    if ((read(s.pipe_rd[from], &msg->s_header, sizeof(MessageHeader))) < 0) {
+    if ((read(s->pipe_rd[from], &msg->s_header, sizeof(MessageHeader))) < 0) {
         perror("read");
         return errno;
     }
 
-    if ((read(s.pipe_rd[from], &msg->s_payload, msg->s_header.s_payload_len)) < 0) {
+    if ((read(s->pipe_rd[from], &msg->s_payload, msg->s_header.s_payload_len)) < 0) {
         perror("read");
         return errno;
     }
