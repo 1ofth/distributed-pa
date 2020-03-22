@@ -3,4 +3,8 @@ project(distributedomputing_pa1 C)
 
 set(CMAKE_C_STANDARD 99)
 add_compile_options(-Wall -pedantic)
-add_executable(distributedomputing_pa1 main.c ipc.h common.h pa1.h distributed.h ipc.c logger.h)
+add_executable(distributedomputing_pa1 main.c ipc.h common.h distributed.h ipc.c logger.h
+        banking.h bank_robbery.c pa2345.h print_history.c)
+
+find_library(libruntime libruntime.so paths ${PROJECT_SOURCE_DIR}/lib64/)
+target_link_libraries(distributedomputing_pa1 ${libruntime})

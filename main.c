@@ -11,6 +11,8 @@
 #include "common.h"
 #include "distributed.h"
 #include "logger.h"
+#include "banking.h"
+
 
 int processes_total;
 FILE *event_log;
@@ -33,6 +35,12 @@ static void receive_all(dist_process *dp, local_id curr, Message *msg) {
             receive(dp, j, msg);
         }
     }
+}
+
+void transfer(void * parent_data, local_id src, local_id dst,
+              balance_t amount)
+{
+    // student, please implement me
 }
 
 int main(int argc, char *argv[]) {
@@ -137,6 +145,9 @@ int main(int argc, char *argv[]) {
     Message res_msg;
     receive_all(&dp[PARENT_ID], PARENT_ID, &res_msg);
     log_received_all_started(PARENT_ID);
+
+//    bank_robbery(parent_data);
+//    print_history(all);
 
     receive_all(&dp[PARENT_ID], PARENT_ID, &res_msg);
     log_received_all_done(PARENT_ID);
