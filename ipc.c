@@ -1,7 +1,9 @@
+#define _XOPEN_SOURCE 600
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <time.h>
 #include "distributed.h"
 
 int send(void *self, local_id dst, const Message *msg) {
@@ -55,6 +57,7 @@ int receive_any(void * self, Message * msg) {
                 }
             }
         }
+        nanosleep((const struct timespec[]) {{0, 100000L}}, NULL);
     }
 }
 

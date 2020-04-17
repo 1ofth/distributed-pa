@@ -13,7 +13,6 @@
 #include "common.h"
 #include "distributed.h"
 #include "logger.h"
-#include "banking.h"
 
 
 int processes_total;
@@ -30,15 +29,6 @@ static void close_pipes(dist_process dp[], local_id current) {
     }
 }
 
-static void receive_all(dist_process *dp, local_id curr, Message *msg) {
-    memset(msg->s_payload, 0, msg->s_header.s_payload_len);
-    for (local_id j = 1; j < processes_total; ++j) {
-        if (j != curr) {
-            receive(dp, j, msg);
-        }
-    }
-}
-
 static void receive_all_balance_histories(dist_process *parent, AllHistory *all_history) {
     all_history->s_history_len = (uint8_t) (processes_total - 1);
     for (local_id i = 1; i < processes_total; i++) {
@@ -47,6 +37,7 @@ static void receive_all_balance_histories(dist_process *parent, AllHistory *all_
         if (msg.s_header.s_type == BALANCE_HISTORY) {
             BalanceHistory *their_history = (BalanceHistory *) &msg.s_payload;
             all_history->s_history[i - 1] = *their_history;
+            move_local_time(parent, msg.s_header.s_local_time);
         }
     }
 }
@@ -54,11 +45,11 @@ static void receive_all_balance_histories(dist_process *parent, AllHistory *all_
 void transfer(void *parent_data, local_id src, local_id dst,
               balance_t amount) {
     dist_process *s = parent_data;
-
+    s->time++;
     Message msg = {
             .s_header = {
                     .s_type = TRANSFER,
-                    .s_local_time = get_physical_time(),
+                    .s_local_time = s->time,
                     .s_magic = MESSAGE_MAGIC
             },
     };
@@ -71,10 +62,12 @@ void transfer(void *parent_data, local_id src, local_id dst,
 
     memcpy(msg.s_payload, &to, sizeof(TransferOrder));
     msg.s_header.s_payload_len = sizeof(TransferOrder);
+    msg.s_header.s_magic = MESSAGE_MAGIC;
     send(s, src, &msg);
 
     memset(msg.s_payload, 0, msg.s_header.s_payload_len);
     receive(s, dst, &msg); //ACK
+    move_local_time(s, msg.s_header.s_local_time);
 }
 
 int main(int argc, char *argv[]) {
@@ -104,7 +97,8 @@ int main(int argc, char *argv[]) {
         dist_process process = (dist_process) {
                 .pipe_rd = malloc(processes_total * sizeof(int)),
                 .pipe_wr = malloc(processes_total * sizeof(int)),
-                .balance_history = malloc(sizeof(BalanceHistory))
+                .balance_history = malloc(sizeof(BalanceHistory)),
+                .time = 0
         };
         dp[i] = process;
     }
@@ -130,8 +124,8 @@ int main(int argc, char *argv[]) {
     }
     fclose(pipe_log);
 
-    dp[0].local_pid = PARENT_ID;
-    dp[0].pid = getpid();
+    dp[PARENT_ID].local_pid = PARENT_ID;
+    dp[PARENT_ID].pid = getpid();
 
     event_log = fopen(events_log, "w");
     for (local_id i = 1; i < processes_total; i++) {
@@ -149,17 +143,19 @@ int main(int argc, char *argv[]) {
     close_pipes(dp, PARENT_ID);
 
     Message msg;
-    receive_all(&dp[PARENT_ID], PARENT_ID, &msg);
+    receive_all(&dp[PARENT_ID], PARENT_ID);
     log_received_all_started(&dp[PARENT_ID]);
 
     bank_robbery(&dp[PARENT_ID], (local_id) (processes_total - 1));
+    (&dp[PARENT_ID])->time++;
     msg.s_header.s_type = STOP;
-    msg.s_header.s_local_time = get_physical_time();
+    msg.s_header.s_local_time = dp[PARENT_ID].time;
     msg.s_header.s_payload_len = 0;
+    msg.s_header.s_magic = MESSAGE_MAGIC;
 
     send_multicast(&dp[PARENT_ID], &msg);
 
-    receive_all(&dp[PARENT_ID], PARENT_ID, &msg); // DONE
+    receive_all(&dp[PARENT_ID], PARENT_ID); // DONE
     log_received_all_done(&dp[PARENT_ID]);
 
     AllHistory *all_history = malloc(sizeof(AllHistory));
