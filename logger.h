@@ -12,7 +12,3 @@ void log_received_all_started(dist_process *dp);
 void log_done(dist_process *dp);
 
 void log_received_all_done(dist_process *dp);
-
-void log_transfer_in(TransferOrder *to, timestamp_t time);
-
-void log_transfer_out(TransferOrder *to, timestamp_t time);

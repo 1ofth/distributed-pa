@@ -1,4 +1,5 @@
 
+#include <stdio.h>
 #include "ipc.h"
 #include "distributed.h"
 
@@ -7,6 +8,11 @@ void move_local_time(dist_process *dp, timestamp_t events_time) {
         dp->time = events_time;
     }
     dp->time++;
+}
+
+timestamp_t inc_local_time(dist_process *dp) {
+    dp->time++;
+    return dp->time;
 }
 
 void receive_all(dist_process *dp, local_id curr) {

@@ -16,6 +16,7 @@
 
 
 int processes_total;
+bool mutexl;
 FILE *event_log;
 
 static void close_pipes(dist_process dp[], local_id current) {
@@ -29,65 +30,27 @@ static void close_pipes(dist_process dp[], local_id current) {
     }
 }
 
-static void receive_all_balance_histories(dist_process *parent, AllHistory *all_history) {
-    all_history->s_history_len = (uint8_t) (processes_total - 1);
-    for (local_id i = 1; i < processes_total; i++) {
-        Message msg;
-        receive(parent, i, &msg);
-        if (msg.s_header.s_type == BALANCE_HISTORY) {
-            BalanceHistory *their_history = (BalanceHistory *) &msg.s_payload;
-            all_history->s_history[i - 1] = *their_history;
-            move_local_time(parent, msg.s_header.s_local_time);
-        }
-    }
-}
-
-void transfer(void *parent_data, local_id src, local_id dst,
-              balance_t amount) {
-    dist_process *s = parent_data;
-    s->time++;
-    Message msg = {
-            .s_header = {
-                    .s_type = TRANSFER,
-                    .s_local_time = s->time,
-                    .s_magic = MESSAGE_MAGIC
-            },
-    };
-
-    TransferOrder to = {
-            .s_src = src,
-            .s_dst = dst,
-            .s_amount = amount
-    };
-
-    memcpy(msg.s_payload, &to, sizeof(TransferOrder));
-    msg.s_header.s_payload_len = sizeof(TransferOrder);
-    msg.s_header.s_magic = MESSAGE_MAGIC;
-    send(s, src, &msg);
-
-    memset(msg.s_payload, 0, msg.s_header.s_payload_len);
-    receive(s, dst, &msg); //ACK
-    move_local_time(s, msg.s_header.s_local_time);
-}
-
 int main(int argc, char *argv[]) {
     int opt;
+    static struct option long_options[] =
+            {
+                    {"mutexl", no_argument, NULL, 'm'},
+                    {NULL, 0,               NULL, 0}
+            };
 
-    while ((opt = getopt(argc, argv, "p:")) != -1) {
+    while ((opt = getopt_long(argc, argv, "p:", long_options, NULL)) != -1) {
         switch (opt) {
+            case 'm':
+                mutexl = true;
+                break;
             case 'p':
                 processes_total = atoi(optarg);
                 break;
             default:
-                fprintf(stderr, "Usage: %s [-p] [number of processes] amount...\n", argv[0]);
+                fprintf(stderr, "Usage: %s -p number of processes [--mutexl]\n", argv[0]);
                 exit(EXIT_FAILURE);
         }
     }
-
-//    if (processes_total < 1 || processes_total > 10) {
-//        fprintf(stderr, "Number of processes should be between 1 and 10\n");
-//        exit(EXIT_FAILURE);
-//    }
 
     processes_total++;
 
@@ -95,10 +58,8 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < processes_total; i++) {
         dist_process process = (dist_process) {
-                .pipe_rd = malloc(processes_total * sizeof(int)),
-                .pipe_wr = malloc(processes_total * sizeof(int)),
-                .balance_history = malloc(sizeof(BalanceHistory)),
-                .time = 0
+                .time = 0,
+                .done_left = processes_total - 2
         };
         dp[i] = process;
     }
@@ -130,8 +91,9 @@ int main(int argc, char *argv[]) {
     event_log = fopen(events_log, "w");
     for (local_id i = 1; i < processes_total; i++) {
         dp[i].local_pid = i;
-        dp[i].balance_history->s_id = i;
-        dp[i].balance = (balance_t) atoi(argv[i + 2]);
+        dp[i].requests_queue = (MinPQ) {
+                .size = 0
+        };
 
         if (fork() == 0) {
             /* handle child process */
@@ -142,25 +104,24 @@ int main(int argc, char *argv[]) {
 
     close_pipes(dp, PARENT_ID);
 
-    Message msg;
     receive_all(&dp[PARENT_ID], PARENT_ID);
     log_received_all_started(&dp[PARENT_ID]);
 
-    bank_robbery(&dp[PARENT_ID], (local_id) (processes_total - 1));
-    (&dp[PARENT_ID])->time++;
-    msg.s_header.s_type = STOP;
-    msg.s_header.s_local_time = dp[PARENT_ID].time;
-    msg.s_header.s_payload_len = 0;
-    msg.s_header.s_magic = MESSAGE_MAGIC;
+    dp[PARENT_ID].done_left = processes_total - 1;
+    Message msg;
+    while (dp[PARENT_ID].done_left != 0) {
+        receive_any(&dp[PARENT_ID], &msg);
+        move_local_time(&dp[PARENT_ID], msg.s_header.s_local_time);
+        switch (msg.s_header.s_type) {
+            case DONE:
+                dp[PARENT_ID].done_left--;
+                break;
+            default:
+                break;
 
-    send_multicast(&dp[PARENT_ID], &msg);
-
-    receive_all(&dp[PARENT_ID], PARENT_ID); // DONE
+        }
+    }
     log_received_all_done(&dp[PARENT_ID]);
-
-    AllHistory *all_history = malloc(sizeof(AllHistory));
-    receive_all_balance_histories(&dp[PARENT_ID], all_history);
-    print_history(all_history);
 
     fclose(event_log);
     for (local_id j = 1; j < processes_total; ++j) {
