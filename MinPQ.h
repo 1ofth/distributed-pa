@@ -12,6 +12,8 @@ typedef struct {
     int size;
 } MinPQ;
 
+int cmp(Entry *left, Entry *right);
+
 void push(MinPQ *pq, Entry entry);
 
 Entry pop(MinPQ *pq);

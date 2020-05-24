@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include "MinPQ.h"
 
-static int cmp(Entry *left, Entry *right) {
+int cmp(Entry *left, Entry *right) {
     if (left->time > right->time)
         return 1;
     else if (left->time < right->time)
